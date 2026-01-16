@@ -1,0 +1,108 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>com.callflow.visualizer</id>
+    <name>CallFlow Visualizer</name>
+    <version>1.0.0</version>
+    <vendor email="your-email@example.com" url="https://github.com/your-username/CallFlow-Visualizer">Your Name</vendor>
+
+    <!--
+    ============================================
+    유료 플러그인 설정 (Marketplace Paid Plugin)
+    ============================================
+    product-descriptor: JetBrains Marketplace 유료 플러그인 등록 시 필요
+    - code: 고유 제품 코드 (마켓플레이스에서 할당받음)
+    - release-date: 첫 릴리스 날짜 (YYYYMMDD)
+    - release-version: 릴리스 버전 (마켓플레이스용)
+
+    주의: 실제 유료 등록 시 JetBrains에서 받은 값으로 교체 필요
+    -->
+    <!-- <product-descriptor code="PCALLFLOW" release-date="20250116" release-version="10000"/> -->
+
+    <description><![CDATA[
+        <h2>CallFlow Visualizer</h2>
+        <p>Visualize method call flows in Spring Boot codebases with bidirectional analysis.</p>
+
+        <h3>Features</h3>
+        <ul>
+            <li><b>Caller Analysis</b>: Find all methods that call the selected method</li>
+            <li><b>Callee Analysis</b>: Find all methods called by the selected method</li>
+            <li><b>Spring Integration</b>: Interface→Implementation, Event→Listener mapping</li>
+            <li><b>Visual Graph</b>: Interactive tree and graph visualization</li>
+            <li><b>Export</b>: Mermaid, PlantUML, SVG, PNG formats</li>
+        </ul>
+
+        <h3>Usage</h3>
+        <p>Right-click on any method → "Analyze Call Flow" or use the Tool Window.</p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <h3>1.0.0</h3>
+        <ul>
+            <li>Initial release</li>
+            <li>Basic caller/callee analysis</li>
+            <li>Tree view visualization</li>
+        </ul>
+    ]]></change-notes>
+
+    <!-- Product and platform compatibility -->
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
+    <depends>org.jetbrains.kotlin</depends>
+
+    <!-- Kotlin K2 mode compatibility -->
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <supportsKotlinPluginMode supportsK2="true"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Tool Window -->
+        <toolWindow id="CallFlow"
+                    secondary="true"
+                    anchor="right"
+                    icon="AllIcons.Toolwindows.ToolWindowHierarchy"
+                    factoryClass="com.callflow.ui.toolwindow.CallFlowToolWindowFactory"/>
+
+        <!-- Settings -->
+        <applicationConfigurable
+                parentId="tools"
+                instance="com.callflow.settings.CallFlowConfigurable"
+                id="com.callflow.settings.CallFlowConfigurable"
+                displayName="CallFlow Visualizer"/>
+
+        <applicationService
+                serviceImplementation="com.callflow.settings.CallFlowSettings"/>
+    </extensions>
+
+    <actions>
+        <!-- Editor Context Menu Action -->
+        <action id="CallFlow.AnalyzeCallFlow"
+                class="com.callflow.action.AnalyzeCallFlowAction"
+                text="Analyze Call Flow"
+                description="Analyze method call hierarchy"
+                icon="AllIcons.Hierarchy.Subtypes">
+            <add-to-group group-id="EditorPopupMenu" anchor="after" relative-to-action="EditorPopupMenu1"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt H"/>
+        </action>
+
+        <!-- Toolbar Actions -->
+        <group id="CallFlow.ToolbarActions" text="CallFlow Actions" popup="true">
+            <action id="CallFlow.AnalyzeCallers"
+                    class="com.callflow.action.AnalyzeCallersAction"
+                    text="Analyze Callers"
+                    description="Find methods calling this method"
+                    icon="AllIcons.Hierarchy.Supertypes"/>
+            <action id="CallFlow.AnalyzeCallees"
+                    class="com.callflow.action.AnalyzeCalleesAction"
+                    text="Analyze Callees"
+                    description="Find methods called by this method"
+                    icon="AllIcons.Hierarchy.Subtypes"/>
+            <separator/>
+            <action id="CallFlow.ExportMermaid"
+                    class="com.callflow.action.ExportMermaidAction"
+                    text="Export as Mermaid"
+                    description="Export call graph as Mermaid diagram"
+                    icon="AllIcons.ToolbarDecorator.Export"/>
+        </group>
+    </actions>
+</idea-plugin>
