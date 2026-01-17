@@ -23,7 +23,5 @@ build/idea-sandbox/
 # Generated
 generated/
 
-# Test project build artifacts
-testproject/.gradle/
-testproject/build/
-testproject/.idea/
+# Test project (development only)
+testproject/

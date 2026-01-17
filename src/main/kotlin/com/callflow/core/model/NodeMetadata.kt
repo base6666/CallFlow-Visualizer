@@ -1,6 +1,20 @@
 package com.callflow.core.model
 
 /**
+ * Transaction propagation levels from Spring @Transactional
+ */
+enum class TransactionPropagation(val displayName: String) {
+    NONE("No TX"),           // Not transactional
+    REQUIRED("TX"),          // Default - join existing or create new
+    REQUIRES_NEW("NEW TX"),  // Always create new transaction
+    NOT_SUPPORTED("NO TX"),  // Execute without transaction
+    SUPPORTS("TX?"),         // Use TX if exists, otherwise no TX
+    MANDATORY("TX!"),        // Must have existing TX
+    NEVER("NEVER TX"),       // Must NOT have existing TX
+    NESTED("NESTED TX")      // Nested transaction
+}
+
+/**
  * Additional metadata associated with a call graph node.
  * Contains Spring-specific information and behavioral markers.
  */
@@ -10,6 +24,9 @@ data class NodeMetadata(
 
     /** Whether the method is annotated with @Transactional */
     val isTransactional: Boolean = false,
+
+    /** Transaction propagation level */
+    val transactionPropagation: TransactionPropagation = TransactionPropagation.NONE,
 
     /** HTTP method if this is a REST endpoint (GET, POST, etc.) */
     val httpMethod: String? = null,

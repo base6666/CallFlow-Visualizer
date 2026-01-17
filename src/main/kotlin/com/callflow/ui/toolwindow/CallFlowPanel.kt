@@ -46,6 +46,7 @@ class CallFlowPanel(
     private val statusLabel = JBLabel("Select a method and click 'Analyze Call Flow'")
     private val depthComboBox = ComboBox(arrayOf(1, 2, 3, 5, 7, 10))
     private val directionComboBox = ComboBox(arrayOf("Both", "Callers Only", "Callees Only"))
+    private val hideEntitiesCheckbox = JCheckBox("Hide Entities", false)
 
     // State
     private var currentGraph: CallGraph? = null
@@ -135,6 +136,15 @@ class CallFlowPanel(
             add(JBLabel("Depth:"))
             depthComboBox.selectedItem = 5
             add(depthComboBox)
+
+            // Hide Entities checkbox
+            hideEntitiesCheckbox.apply {
+                toolTipText = "Hide Entity classes from the graph"
+                addActionListener {
+                    graphPanel.setHideEntities(isSelected)
+                }
+            }
+            add(hideEntitiesCheckbox)
 
             // Refresh button
             val refreshButton = JButton("Refresh").apply {

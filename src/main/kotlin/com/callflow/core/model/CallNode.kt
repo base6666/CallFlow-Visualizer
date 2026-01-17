@@ -127,9 +127,17 @@ data class CallNode(
          */
         private fun extractMetadata(method: PsiMethod): NodeMetadata {
             val annotations = method.annotations.mapNotNull { it.qualifiedName }
+            val isTransactional = annotations.any { it.contains("Transactional") }
+            val propagation = if (isTransactional) {
+                extractTransactionPropagation(method)
+            } else {
+                TransactionPropagation.NONE
+            }
+
             return NodeMetadata(
                 isAsync = annotations.any { it.contains("Async") },
-                isTransactional = annotations.any { it.contains("Transactional") },
+                isTransactional = isTransactional,
+                transactionPropagation = propagation,
                 httpMethod = extractHttpMethod(annotations),
                 httpPath = extractHttpPath(method),
                 annotations = annotations.map { it.substringAfterLast(".") },
@@ -140,6 +148,31 @@ data class CallNode(
                 returnType = method.returnType?.presentableText ?: "void",
                 lineNumber = method.textOffset
             )
+        }
+
+        /**
+         * Extract transaction propagation level from @Transactional annotation.
+         */
+        private fun extractTransactionPropagation(method: PsiMethod): TransactionPropagation {
+            for (annotation in method.annotations) {
+                val name = annotation.qualifiedName ?: continue
+                if (name.contains("Transactional")) {
+                    // Check propagation attribute
+                    val propagationValue = annotation.findAttributeValue("propagation")
+                    val propagationText = propagationValue?.text ?: return TransactionPropagation.REQUIRED
+
+                    return when {
+                        propagationText.contains("REQUIRES_NEW") -> TransactionPropagation.REQUIRES_NEW
+                        propagationText.contains("NOT_SUPPORTED") -> TransactionPropagation.NOT_SUPPORTED
+                        propagationText.contains("SUPPORTS") -> TransactionPropagation.SUPPORTS
+                        propagationText.contains("MANDATORY") -> TransactionPropagation.MANDATORY
+                        propagationText.contains("NEVER") -> TransactionPropagation.NEVER
+                        propagationText.contains("NESTED") -> TransactionPropagation.NESTED
+                        else -> TransactionPropagation.REQUIRED // Default
+                    }
+                }
+            }
+            return TransactionPropagation.REQUIRED
         }
 
         private fun extractHttpMethod(annotations: List<String>): String? {

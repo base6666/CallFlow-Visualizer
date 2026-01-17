@@ -14,7 +14,7 @@ import kotlin.math.min
 
 /**
  * Visual graph panel that renders call flow as an interactive diagram.
- * Supports zoom, pan, and node selection.
+ * Supports zoom, pan, node selection, and Entity hiding.
  */
 class CallGraphPanel : JPanel() {
 
@@ -33,11 +33,14 @@ class CallGraphPanel : JPanel() {
     private var selectedNode: GraphNode? = null
     private var hoveredNode: GraphNode? = null
 
+    // Display options
+    private var hideEntities: Boolean = false
+
     // Layout constants - Horizontal layout (left to right)
     private val nodeWidth = 200
     private val nodeHeight = 60
-    private val horizontalGap = 60
-    private val verticalGap = 30
+    private val horizontalGap = 180  // Horizontal spacing between depth levels
+    private val verticalGap = 80     // Vertical spacing between nodes at same depth
 
     // Zoom limits
     private val minScale = 0.2
@@ -243,6 +246,7 @@ class CallGraphPanel : JPanel() {
 
     /**
      * Collect unique nodes recursively.
+     * Filters out Entity nodes when hideEntities is true.
      */
     private fun collectUniqueNodes(
         nodes: List<CallNode>,
@@ -254,6 +258,11 @@ class CallGraphPanel : JPanel() {
         if (depth > 5) return
 
         nodes.forEach { node ->
+            // Skip Entity nodes if hideEntities is enabled
+            if (hideEntities && node.type == NodeType.ENTITY) {
+                return@forEach
+            }
+
             val nodeId = node.id
             if (nodeId !in allNodes) {
                 allNodes[nodeId] = node
@@ -359,7 +368,7 @@ class CallGraphPanel : JPanel() {
         g2.translate(offsetX, offsetY)
         g2.scale(scale, scale)
 
-        // Draw edges first (behind nodes)
+        // Draw edges (behind nodes)
         graphEdges.forEach { edge ->
             drawEdge(g2, edge)
         }
@@ -562,4 +571,15 @@ class CallGraphPanel : JPanel() {
         val from: GraphNode,
         val to: GraphNode
     )
+
+    /**
+     * Set whether to hide Entity nodes from the graph.
+     */
+    fun setHideEntities(hide: Boolean) {
+        if (this.hideEntities != hide) {
+            this.hideEntities = hide
+            buildGraphLayout()
+            repaint()
+        }
+    }
 }
