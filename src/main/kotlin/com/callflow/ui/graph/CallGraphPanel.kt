@@ -2,6 +2,7 @@ package com.callflow.ui.graph
 
 import com.callflow.core.model.CallNode
 import com.callflow.core.model.NodeType
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
 import java.awt.*
@@ -17,6 +18,8 @@ import kotlin.math.min
  * Supports zoom, pan, node selection, and Entity hiding.
  */
 class CallGraphPanel : JPanel() {
+
+    private val LOG = Logger.getInstance(CallGraphPanel::class.java)
 
     private var rootNode: CallNode? = null
     private var graphNodes: MutableList<GraphNode> = mutableListOf()
@@ -35,12 +38,14 @@ class CallGraphPanel : JPanel() {
 
     // Display options
     private var hideEntities: Boolean = false
+    private var hideTestCode: Boolean = true  // Default: hide test code
 
     // Layout constants - Horizontal layout (left to right)
     private val nodeWidth = 200
     private val nodeHeight = 60
-    private val horizontalGap = 180  // Horizontal spacing between depth levels
-    private val verticalGap = 80     // Vertical spacing between nodes at same depth
+    private val horizontalGap = 220  // Horizontal spacing between depth levels (increased)
+    private val verticalGap = 100    // Vertical spacing between nodes at same depth (increased)
+    private val minVerticalGap = 40  // Minimum absolute gap between nodes to prevent overlap
 
     // Zoom limits
     private val minScale = 0.2
@@ -124,9 +129,9 @@ class CallGraphPanel : JPanel() {
         this.rootNode = callNode
         buildGraphLayout()
 
-        // Center the view on the root node
+        // Fit the entire graph in view on initial load
         SwingUtilities.invokeLater {
-            centerOnRoot()
+            fitToView()
             repaint()
         }
     }
@@ -239,14 +244,17 @@ class CallGraphPanel : JPanel() {
             layoutNodesAtDepth(nodeIds, allNodes, nodeMap, depth, isCallers = false, totalHeight)
         }
 
-        // Build edges
-        buildAllEdges(root, nodeMap, edgeSet, isCallers = true)
-        buildAllEdges(root, nodeMap, edgeSet, isCallers = false)
+        // Build edges - first callers (left side), then callees (right side) with DFS ordering
+        buildAllEdges(root, nodeMap, edgeSet, isCallers = true, callOrderCounter = null)
+        // Use a counter for DFS-based call ordering (callees only)
+        val callOrderCounter = intArrayOf(0)
+        buildAllEdges(root, nodeMap, edgeSet, isCallers = false, callOrderCounter = callOrderCounter)
     }
 
     /**
      * Collect unique nodes recursively.
      * Filters out Entity nodes when hideEntities is true.
+     * Filters out test code when hideTestCode is true.
      */
     private fun collectUniqueNodes(
         nodes: List<CallNode>,
@@ -260,6 +268,11 @@ class CallGraphPanel : JPanel() {
         nodes.forEach { node ->
             // Skip Entity nodes if hideEntities is enabled
             if (hideEntities && node.type == NodeType.ENTITY) {
+                return@forEach
+            }
+
+            // Skip test code if hideTestCode is enabled
+            if (hideTestCode && isTestCode(node)) {
                 return@forEach
             }
 
@@ -277,7 +290,8 @@ class CallGraphPanel : JPanel() {
     }
 
     /**
-     * Layout nodes at a specific depth level.
+     * Layout nodes at a specific depth level with dynamic spacing.
+     * Ensures minimum gap between nodes to prevent overlap.
      */
     private fun layoutNodesAtDepth(
         nodeIds: List<String>,
@@ -288,7 +302,16 @@ class CallGraphPanel : JPanel() {
         totalHeight: Int
     ) {
         val count = nodeIds.size
-        val levelHeight = count * (nodeHeight + verticalGap) - verticalGap
+        if (count == 0) return
+
+        // Calculate actual gap: use larger of verticalGap or minVerticalGap based on node count
+        val actualGap = if (count > 5) {
+            max(verticalGap, minVerticalGap + (count - 5) * 10)  // Increase gap for many nodes
+        } else {
+            verticalGap
+        }
+
+        val levelHeight = count * (nodeHeight + actualGap) - actualGap
         var y = totalHeight / 2 - levelHeight / 2
 
         val x = if (isCallers) {
@@ -304,18 +327,23 @@ class CallGraphPanel : JPanel() {
                 graphNodes.add(graphNode)
                 nodeMap[nodeId] = graphNode
             }
-            y += nodeHeight + verticalGap
+            y += nodeHeight + actualGap
         }
     }
 
     /**
-     * Build edges recursively.
+     * Build edges recursively with DFS-based call order tracking.
+     * For callees: assigns order based on DFS traversal (go deep first, then sibling).
+     * Example: START -> A -> B -> C, then A -> D becomes: 1(A), 2(B), 3(C), 4(D)
+     *
+     * @param callOrderCounter Mutable counter for DFS order (null for callers)
      */
     private fun buildAllEdges(
         node: CallNode,
         nodeMap: Map<String, GraphNode>,
         edgeSet: MutableSet<String>,
-        isCallers: Boolean
+        isCallers: Boolean,
+        callOrderCounter: IntArray?
     ) {
         val graphNode = nodeMap[node.id] ?: return
         val children = if (isCallers) node.callers else node.callees
@@ -331,6 +359,12 @@ class CallGraphPanel : JPanel() {
 
             if (edgeKey !in edgeSet) {
                 edgeSet.add(edgeKey)
+
+                // For callees: increment counter and assign DFS order to the TARGET NODE
+                if (!isCallers && callOrderCounter != null && childGraphNode.callOrder == 0) {
+                    childGraphNode.callOrder = ++callOrderCounter[0]
+                }
+
                 val edge = if (isCallers) {
                     GraphEdge(childGraphNode, graphNode)
                 } else {
@@ -339,8 +373,9 @@ class CallGraphPanel : JPanel() {
                 graphEdges.add(edge)
             }
 
+            // DFS: go deep first before processing siblings
             if (!child.isCyclicRef) {
-                buildAllEdges(child, nodeMap, edgeSet, isCallers)
+                buildAllEdges(child, nodeMap, edgeSet, isCallers, callOrderCounter)
             }
         }
     }
@@ -495,6 +530,31 @@ class CallGraphPanel : JPanel() {
             g2.font = Font("SansSerif", Font.BOLD, 11)
             g2.drawString("★ START", x + nodeWidth - 70, y + 19)
         }
+
+        // Draw call order badge for callee nodes (callOrder > 0)
+        if (node.callOrder > 0) {
+            val orderText = node.callOrder.toString()
+            val badgeSize = 18
+            val badgeX = x - badgeSize / 2  // Position at top-left corner
+            val badgeY = y - badgeSize / 2
+
+            // Draw circle badge
+            g2.color = Color(0x2196F3)  // Blue badge
+            g2.fillOval(badgeX, badgeY, badgeSize, badgeSize)
+
+            // Draw border
+            g2.color = Color.WHITE
+            g2.stroke = BasicStroke(1.5f)
+            g2.drawOval(badgeX, badgeY, badgeSize, badgeSize)
+
+            // Draw number
+            g2.color = Color.WHITE
+            g2.font = Font("SansSerif", Font.BOLD, 10)
+            val fm = g2.fontMetrics
+            val textX = badgeX + (badgeSize - fm.stringWidth(orderText)) / 2
+            val textY = badgeY + (badgeSize + fm.ascent) / 2 - 2
+            g2.drawString(orderText, textX, textY)
+        }
     }
 
     private fun truncateText(g2: Graphics2D, text: String, maxWidth: Int): String {
@@ -542,7 +602,7 @@ class CallGraphPanel : JPanel() {
         // Draw controls hint
         g2.color = JBColor.GRAY
         g2.font = Font("SansSerif", Font.PLAIN, 10)
-        g2.drawString("Scroll: Zoom | Drag: Pan | Double-click: Navigate", 10, height - 25)
+        g2.drawString("Scroll: Zoom | Drag: Pan | Click: Navigate", 10, height - 25)
     }
 
     private fun drawPlaceholder(g2: Graphics2D) {
@@ -561,7 +621,8 @@ class CallGraphPanel : JPanel() {
     data class GraphNode(
         val callNode: CallNode,
         var x: Int,
-        var y: Int
+        var y: Int,
+        var callOrder: Int = 0  // DFS-based call order (0 = not set, 1+ = call sequence)
     )
 
     /**
@@ -581,5 +642,57 @@ class CallGraphPanel : JPanel() {
             buildGraphLayout()
             repaint()
         }
+    }
+
+    /**
+     * Set whether to hide test code from the graph.
+     */
+    fun setHideTestCode(hide: Boolean) {
+        if (this.hideTestCode != hide) {
+            this.hideTestCode = hide
+            buildGraphLayout()
+            repaint()
+        }
+    }
+
+    /**
+     * Check if a node represents test code.
+     * Priority: file path > class name > package name > annotations
+     */
+    private fun isTestCode(node: CallNode): Boolean {
+        // 1. Check file path first (most reliable)
+        val filePath = node.metadata.filePath?.lowercase()
+        if (filePath != null) {
+            // Check for common test directory patterns
+            if (filePath.contains("/test/") ||
+                filePath.contains("/tests/") ||
+                filePath.contains("/src/test/") ||
+                filePath.contains("/src/tests/") ||
+                filePath.contains("\\test\\") ||
+                filePath.contains("\\tests\\")) {
+                return true
+            }
+        }
+
+        // 2. Check class name patterns
+        val className = node.className.lowercase()
+        if (className.endsWith("test") ||
+            className.endsWith("tests") ||
+            className.startsWith("test")) {
+            return true
+        }
+
+        // 3. Check package name patterns
+        val packageName = node.packageName.lowercase()
+        if (packageName.contains(".test.") ||
+            packageName.contains(".tests.") ||
+            packageName.endsWith(".test") ||
+            packageName.endsWith(".tests")) {
+            return true
+        }
+
+        // 4. Check annotations (@Test, @TestInstance, etc.)
+        val annotations = node.metadata.annotations.map { it.lowercase() }
+        return annotations.any { it.contains("test") }
     }
 }
