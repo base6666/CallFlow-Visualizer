@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.callflow"
-version = "1.0.2"
+version = "1.0.3"
 
 // Semantic Versioning: MAJOR.MINOR.PATCH
 // - MAJOR: 호환성 깨지는 변경
@@ -30,6 +30,9 @@ dependencies {
         pluginVerifier()
         zipSigner()
     }
+
+    // Test dependencies
+    testImplementation("junit:junit:4.13.2")
 }
 
 java {
