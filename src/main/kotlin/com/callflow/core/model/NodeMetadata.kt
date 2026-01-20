@@ -53,7 +53,10 @@ data class NodeMetadata(
     val returnType: String = "void",
 
     /** Line number in source file */
-    val lineNumber: Int = -1
+    val lineNumber: Int = -1,
+
+    /** File path for test detection */
+    val filePath: String? = null
 ) {
     enum class Visibility {
         PUBLIC, PROTECTED, PACKAGE_PRIVATE, PRIVATE

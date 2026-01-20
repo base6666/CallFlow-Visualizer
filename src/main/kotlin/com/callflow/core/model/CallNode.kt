@@ -134,6 +134,9 @@ data class CallNode(
                 TransactionPropagation.NONE
             }
 
+            // Extract file path for test detection
+            val filePath = method.containingFile?.virtualFile?.path
+
             return NodeMetadata(
                 isAsync = annotations.any { it.contains("Async") },
                 isTransactional = isTransactional,
@@ -146,7 +149,8 @@ data class CallNode(
                     it.type.presentableText
                 },
                 returnType = method.returnType?.presentableText ?: "void",
-                lineNumber = method.textOffset
+                lineNumber = method.textOffset,
+                filePath = filePath
             )
         }
 
