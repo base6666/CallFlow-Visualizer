@@ -47,6 +47,7 @@ class CallFlowPanel(
     private val depthComboBox = ComboBox(arrayOf(1, 2, 3, 5, 7, 10))
     private val directionComboBox = ComboBox(arrayOf("Both", "Callers Only", "Callees Only"))
     private val hideEntitiesCheckbox = JCheckBox("Hide Entities", false)
+    private val hideTestCodeCheckbox = JCheckBox("Hide Test Code", true)  // Default: hide test code
 
     // State
     private var currentGraph: CallGraph? = null
@@ -58,6 +59,8 @@ class CallFlowPanel(
 
     init {
         setupUI()
+        // Initialize graph panel with default filter settings
+        graphPanel.setHideTestCode(hideTestCodeCheckbox.isSelected)
     }
 
     /**
@@ -145,6 +148,15 @@ class CallFlowPanel(
                 }
             }
             add(hideEntitiesCheckbox)
+
+            // Hide Test Code checkbox
+            hideTestCodeCheckbox.apply {
+                toolTipText = "Hide test classes from the graph (classes ending with Test, in test packages, or with @Test annotation)"
+                addActionListener {
+                    graphPanel.setHideTestCode(isSelected)
+                }
+            }
+            add(hideTestCodeCheckbox)
 
             // Refresh button
             val refreshButton = JButton("Refresh").apply {
