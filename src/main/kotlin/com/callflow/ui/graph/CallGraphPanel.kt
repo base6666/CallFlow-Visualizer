@@ -244,11 +244,9 @@ class CallGraphPanel : JPanel() {
             layoutNodesAtDepth(nodeIds, allNodes, nodeMap, depth, isCallers = false, totalHeight)
         }
 
-        // Build edges - first callers (left side), then callees (right side) with DFS ordering
-        buildAllEdges(root, nodeMap, edgeSet, isCallers = true, callOrderCounter = null)
-        // Use a counter for DFS-based call ordering (callees only)
-        val callOrderCounter = intArrayOf(0)
-        buildAllEdges(root, nodeMap, edgeSet, isCallers = false, callOrderCounter = callOrderCounter)
+        // Build edges
+        buildAllEdges(root, nodeMap, edgeSet, isCallers = true)
+        buildAllEdges(root, nodeMap, edgeSet, isCallers = false)
     }
 
     /**
@@ -332,18 +330,13 @@ class CallGraphPanel : JPanel() {
     }
 
     /**
-     * Build edges recursively with DFS-based call order tracking.
-     * For callees: assigns order based on DFS traversal (go deep first, then sibling).
-     * Example: START -> A -> B -> C, then A -> D becomes: 1(A), 2(B), 3(C), 4(D)
-     *
-     * @param callOrderCounter Mutable counter for DFS order (null for callers)
+     * Build edges recursively.
      */
     private fun buildAllEdges(
         node: CallNode,
         nodeMap: Map<String, GraphNode>,
         edgeSet: MutableSet<String>,
-        isCallers: Boolean,
-        callOrderCounter: IntArray?
+        isCallers: Boolean
     ) {
         val graphNode = nodeMap[node.id] ?: return
         val children = if (isCallers) node.callers else node.callees
@@ -360,11 +353,6 @@ class CallGraphPanel : JPanel() {
             if (edgeKey !in edgeSet) {
                 edgeSet.add(edgeKey)
 
-                // For callees: increment counter and assign DFS order to the TARGET NODE
-                if (!isCallers && callOrderCounter != null && childGraphNode.callOrder == 0) {
-                    childGraphNode.callOrder = ++callOrderCounter[0]
-                }
-
                 val edge = if (isCallers) {
                     GraphEdge(childGraphNode, graphNode)
                 } else {
@@ -373,9 +361,8 @@ class CallGraphPanel : JPanel() {
                 graphEdges.add(edge)
             }
 
-            // DFS: go deep first before processing siblings
             if (!child.isCyclicRef) {
-                buildAllEdges(child, nodeMap, edgeSet, isCallers, callOrderCounter)
+                buildAllEdges(child, nodeMap, edgeSet, isCallers)
             }
         }
     }
@@ -530,31 +517,6 @@ class CallGraphPanel : JPanel() {
             g2.font = Font("SansSerif", Font.BOLD, 11)
             g2.drawString("★ START", x + nodeWidth - 70, y + 19)
         }
-
-        // Draw call order badge for callee nodes (callOrder > 0)
-        if (node.callOrder > 0) {
-            val orderText = node.callOrder.toString()
-            val badgeSize = 18
-            val badgeX = x - badgeSize / 2  // Position at top-left corner
-            val badgeY = y - badgeSize / 2
-
-            // Draw circle badge
-            g2.color = Color(0x2196F3)  // Blue badge
-            g2.fillOval(badgeX, badgeY, badgeSize, badgeSize)
-
-            // Draw border
-            g2.color = Color.WHITE
-            g2.stroke = BasicStroke(1.5f)
-            g2.drawOval(badgeX, badgeY, badgeSize, badgeSize)
-
-            // Draw number
-            g2.color = Color.WHITE
-            g2.font = Font("SansSerif", Font.BOLD, 10)
-            val fm = g2.fontMetrics
-            val textX = badgeX + (badgeSize - fm.stringWidth(orderText)) / 2
-            val textY = badgeY + (badgeSize + fm.ascent) / 2 - 2
-            g2.drawString(orderText, textX, textY)
-        }
     }
 
     private fun truncateText(g2: Graphics2D, text: String, maxWidth: Int): String {
@@ -621,8 +583,7 @@ class CallGraphPanel : JPanel() {
     data class GraphNode(
         val callNode: CallNode,
         var x: Int,
-        var y: Int,
-        var callOrder: Int = 0  // DFS-based call order (0 = not set, 1+ = call sequence)
+        var y: Int
     )
 
     /**
